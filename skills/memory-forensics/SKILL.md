@@ -1,4 +1,4 @@
-# Memory Forensics Agent
+﻿# Memory Forensics Agent
 
 Analyze volatile memory captures. Process listings, network connections,
 injected code detection, and command-line artifact extraction.

@@ -1,10 +1,10 @@
-# Architecture — Security Boundaries & Guardrail Analysis
+﻿# Architecture — Security Boundaries & Guardrail Analysis
 
 ## Architectural pattern
 
 **Direct Agent Extension (Claude Code + Protocol SIFT)**
 
-FIND EVIL extends Protocol SIFT's existing Claude Code agent with additional
+ChainSight extends Protocol SIFT's existing Claude Code agent with additional
 SKILL.md files, an orchestrator system prompt (CLAUDE.md), a confidence scoring
 engine, and a self-correction protocol. No separate MCP server. No multi-agent
 framework. All subagents run within a single Claude Code session.
@@ -150,7 +150,7 @@ working, testable, documented submission. The tradeoff is honest and documented.
 
 Protocol SIFT already implements strong permission-based controls (settings.json
 with allow/deny lists, Stop hook audit logging, write scope restrictions).
-FIND EVIL builds on this foundation rather than replacing it. We extend the
+ChainSight builds on this foundation rather than replacing it. We extend the
 analytical capability (what the agent can find) while relying on Protocol SIFT's
 existing security controls (what the agent can break).
 

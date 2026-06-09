@@ -1,11 +1,11 @@
-# Try-It-Out Instructions — FIND EVIL
+﻿# Try-It-Out Instructions — ChainSight
 
-Judges can run FIND EVIL against the provided sample case data or their
+Judges can run ChainSight against the provided sample case data or their
 own evidence files.
 
 ---
 
-## Option A: Quickest path (SIFT VM + Protocol SIFT + FIND EVIL)
+## Option A: Quickest path (SIFT VM + Protocol SIFT + ChainSight)
 
 ### Prerequisites
 - SANS SIFT Workstation (download: sans.org/tools/sift-workstation)
@@ -17,17 +17,17 @@ own evidence files.
 curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash
 ```
 
-### Step 2: Install FIND EVIL
+### Step 2: Install ChainSight
 ```bash
-git clone https://github.com/Gideon145/find-evil.git ~/find-evil
+git clone https://github.com/Gideon145/chainsight.git ~/chainsight
 cp ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.protocol-sift.bak
-cp ~/find-evil/CLAUDE.md ~/.claude/CLAUDE.md
-cp -r ~/find-evil/skills/* ~/.claude/skills/
+cp ~/chainsight/CLAUDE.md ~/.claude/CLAUDE.md
+cp -r ~/chainsight/skills/* ~/.claude/skills/
 ```
 
 ### Step 3: Prepare case directory
 ```bash
-export CASE=find-evil-demo
+export CASE=chainsight-demo
 mkdir -p /cases/${CASE}/{analysis,exports,reports}
 cp ~/.claude/case-templates/CLAUDE.md /cases/${CASE}/CLAUDE.md
 cp ~/.claude/analysis-scripts/generate_pdf_report.py /cases/${CASE}/analysis/

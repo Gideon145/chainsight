@@ -1,8 +1,8 @@
-# FIND EVIL — Devpost Project Description
+﻿# ChainSight — Devpost Project Description
 
 ## What it does
 
-FIND EVIL extends Protocol SIFT with 4 specialized forensic subagents that
+ChainSight extends Protocol SIFT with 4 specialized forensic subagents that
 run in parallel against disk images and memory captures. Memory, disk,
 timeline, and threat hunting agents cross-reference each other's findings,
 compute a unified Forensic Confidence Score (0-100), and generate a PDF
@@ -12,7 +12,7 @@ The agent sequences its approach like a senior analyst: baseline →
 deep dive → cross-reference → self-correct → report. When findings
 contradict each other, the agent re-runs analysis with adjusted parameters.
 
-In testing against the SRL FOR508 Emotet scenario, FIND EVIL identified
+In testing against the SRL FOR508 Emotet scenario, ChainSight identified
 all 12 attack artifacts (9 CRITICAL, 2 HIGH, 1 MEDIUM) with a 95.6
 Confidence Score and zero false positives. The agent self-corrected one
 finding — an encoded PowerShell command initially scored too low due to

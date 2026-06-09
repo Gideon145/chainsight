@@ -1,4 +1,4 @@
-# Accuracy Report — FIND EVIL v1.0
+﻿# Accuracy Report — ChainSight v1.0
 
 ## Test case: SRL FOR508 lab scenario (simulated)
 

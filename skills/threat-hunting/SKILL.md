@@ -1,4 +1,4 @@
-# Threat Hunting Agent
+﻿# Threat Hunting Agent
 
 Sweep evidence for known-bad indicators and behavioral anomalies.
 YARA rules, Sigma rules, IOC matching, and anomaly detection.

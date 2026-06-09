@@ -1,4 +1,4 @@
-# Super-Timeline Agent
+﻿# Super-Timeline Agent
 
 Build and analyze a unified super-timeline from disk + memory artifacts.
 Cross-reference events across sources, flag temporal inconsistencies,

@@ -1,20 +1,20 @@
-# FIND EVIL — Autonomous Incident Response for Protocol SIFT
+﻿# ChainSight — Autonomous Incident Response for Protocol SIFT
 
 **4 parallel forensic agents. 250+ checks. One Forensic Confidence Score.**
 
-Built for the [SANS FIND EVIL! Hackathon](https://findevil.devpost.com/).
+Built for the [SANS ChainSight! Hackathon](https://findevil.devpost.com/).
 
 ---
 
 ## Architecture: Direct Agent Extension
 
-FIND EVIL extends Protocol SIFT's existing Claude Code agent loop with 4
+ChainSight extends Protocol SIFT's existing Claude Code agent loop with 4
 specialized forensic subagents, a weighted confidence scoring engine, and a
 self-correction protocol. This is **Option 1 (Direct Agent Extension)** in the
 hackathon's supported architectural approaches.
 
 ```
-Protocol SIFT (baseline)          FIND EVIL (this submission)
+Protocol SIFT (baseline)          ChainSight (this submission)
 ─────────────────────────         ─────────────────────────────
 Claude Code + 5 SKILL.md          Claude Code + 9 SKILL.md
   files (reference)                 files (4 new forensic agents
@@ -58,7 +58,7 @@ of what happens when the model ignores read-only rules is in [ARCHITECTURE.md](A
 
 ## What it does
 
-Protocol SIFT gives Claude Code access to 200+ forensic tools. FIND EVIL makes
+Protocol SIFT gives Claude Code access to 200+ forensic tools. ChainSight makes
 those tools work together as an autonomous incident response team — 4 specialized
 subagents running in parallel, cross-referencing each other's findings, and
 producing a single Forensic Confidence Score.
@@ -100,7 +100,7 @@ finding source    a legit  analysis    iterations
 ## Structure
 
 ```
-find-evil/
+chainsight/
 ├── CLAUDE.md                        # Orchestrator system prompt
 ├── ARCHITECTURE.md                  # Security boundaries + guardrail analysis
 ├── skills/
@@ -121,11 +121,11 @@ find-evil/
 # 1. Install Protocol SIFT
 curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash
 
-# 2. Install FIND EVIL (extends Protocol SIFT with 4 forensic agents)
-git clone https://github.com/Gideon145/find-evil.git ~/find-evil
+# 2. Install ChainSight (extends Protocol SIFT with 4 forensic agents)
+git clone https://github.com/Gideon145/chainsight.git ~/chainsight
 cp ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.protocol-sift.bak
-cp ~/find-evil/CLAUDE.md ~/.claude/CLAUDE.md
-cp -r ~/find-evil/skills/* ~/.claude/skills/
+cp ~/chainsight/CLAUDE.md ~/.claude/CLAUDE.md
+cp -r ~/chainsight/skills/* ~/.claude/skills/
 ```
 
 ---
@@ -157,4 +157,4 @@ claude
 
 ## License
 
-MIT — SANS FIND EVIL! Hackathon, June 2026.
+MIT — SANS ChainSight! Hackathon, June 2026.

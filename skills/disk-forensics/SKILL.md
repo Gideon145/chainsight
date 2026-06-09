@@ -1,4 +1,4 @@
-# Disk Forensics Agent
+﻿# Disk Forensics Agent
 
 Analyze filesystem artifacts from disk images. Timeline construction,
 file recovery, and Windows artifact parsing (MFT, USN Journal, Prefetch,

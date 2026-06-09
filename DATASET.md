@@ -1,4 +1,4 @@
-# Dataset Documentation
+﻿# Dataset Documentation
 
 ## Case ID: `case-2026-001`
 
@@ -39,7 +39,7 @@ of 95.6 (Grade A). Attack chain fully reconstructed.
 This case is available in the Protocol SIFT sample data. To reproduce:
 
 1. Download SANS SIFT Workstation from sans.org/tools/sift-workstation
-2. Install Protocol SIFT + FIND EVIL
+2. Install Protocol SIFT + ChainSight
 3. Copy evidence files to `/cases/srl/`
 4. Run `/forensic audit` from `/cases/srl/`
 
