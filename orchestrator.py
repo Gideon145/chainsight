@@ -64,14 +64,14 @@ def tool_icat(image: str, inode: str) -> dict:
     return run_tool(["icat", image, inode])
 
 def tool_find(path: str, pattern: str) -> dict:
-    return run_tool(["find", path, "-type", "f", "-name", pattern, "-printf", "%p %s\\n"])
+    return run_tool(["find", path, "-type", "f", "-name", pattern, "-printf", "%p %s\\n", "!", "-path", "*/lost+found/*"])
 
 def tool_find_suspicious(path: str) -> dict:
     """Find suspicious files: .js, .ps1, .exe, .dll, .bat, .vbs, .reg"""
     patterns = ["-name", "*.js", "-o", "-name", "*.ps1", "-o", "-name", "*.exe",
                 "-o", "-name", "*.dll", "-o", "-name", "*.bat", "-o", "-name", "*.reg",
                 "-o", "-name", "*.bin", "-o", "-name", "*.vbs"]
-    cmd = ["find", path, "-type", "f"] + patterns + ["-printf", "%p\\n"]
+    cmd = ["find", path, "-type", "f"] + patterns + ["-printf", "%p\\n", "!", "-path", "*/lost+found/*"]
     return run_tool(cmd, timeout=30)
 
 def tool_strings(path: str, min_len: int = 4) -> dict:
@@ -161,8 +161,20 @@ def run_disk_agent(mount: str, image: str = "") -> dict:
 
     outputs["file_contents"] = suspicious_contents
 
-    # AI analysis
-    prompt = "Analyze disk artifacts for: phishing files (.js), persistence mechanisms (.reg), C2 configs (.bin), suspicious executables. Flag anything malicious."
+    # AI analysis with explicit file contents
+    prompt = """You are a senior incident responder. Analyze these disk artifacts from a compromised Windows system.
+
+Look for:
+- Phishing: JavaScript files (.js) in Downloads with encoded PowerShell commands → CRITICAL
+- Persistence: Registry files (.reg) in ProgramData adding Run keys → CRITICAL  
+- C2: Binary configs (.bin) with IP:port and beacon intervals → HIGH
+- Any file named "invoice" with double extensions or in user Downloads → MEDIUM
+
+If you find base64-encoded PowerShell (starts with "powershell.exe -enc"), mark it CRITICAL.
+If you find "CurrentVersion\\Run" in a .reg file, mark it CRITICAL with explanation of persistence.
+If you find IP addresses with port numbers in .bin files, flag as C2 beacon config.
+
+Return JSON with findings containing SPECIFIC evidence from the file contents, not just filenames."""
     ai = gemini_analyze(prompt, outputs)
     print(f"  [disk-agent] Found {len(ai.get('findings', []))} artifacts, confidence={ai.get('confidence', 0)}")
     return ai
@@ -189,7 +201,7 @@ def run_timeline_agent(mount: str) -> dict:
     outputs = {}
 
     # Use find to get file timestamps as a poor-man's timeline
-    outputs["timeline"] = run_tool(["find", mount, "-type", "f", "-printf", "%T@ %p\\n", "-maxdepth", "5"])
+    outputs["timeline"] = run_tool(["find", mount, "-type", "f", "-printf", "%T@ %p\\n", "-maxdepth", "5", "!", "-path", "*/lost+found/*"])
 
     prompt = "Build a timeline of file creation/modification. Identify suspicious temporal patterns."
     ai = gemini_analyze(prompt, outputs)
@@ -200,12 +212,22 @@ def run_threat_agent(mount: str) -> dict:
     print("  [threat-agent] Hunting for IOCs and attack patterns...")
     outputs = {}
 
-    # Search for known-bad patterns: base64, C2 IPs, persistence keys
-    outputs["base64_strings"] = run_tool(["grep", "-rl", "AAAA|Q3J5|powershell|cmd\\.exe|rundll32|HKLM|CurrentVersion\\\\Run|beacon|payload", mount])
+    # Search for known-bad patterns
+    outputs["base64_strings"] = run_tool(["grep", "-rl", "--exclude-dir=lost+found", "powershell|cmd\\.exe|rundll32|HKLM|CurrentVersion\\\\Run|beacon|payload|base64", mount])
 
     # Read all suspicious files for IOC matching
     ioc_matches = tool_find_suspicious(mount)
     outputs["ioc_targets"] = ioc_matches
+
+    # Read contents of found files for analysis
+    suspicious_contents = {}
+    if ioc_matches["ok"]:
+        for line in ioc_matches["stdout"].split("\n")[:10]:
+            if line.strip():
+                p = line.strip()
+                suspicious_contents[p] = tool_cat(p)["stdout"][:1000]
+
+    outputs["file_contents"] = suspicious_contents
 
     prompt = "Hunt for threats: base64-encoded commands, C2 beacon configs, persistence registry keys, known malware IOCs. Cross-reference with disk findings."
     ai = gemini_analyze(prompt, outputs)
