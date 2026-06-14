@@ -2,6 +2,11 @@
 
 **4 parallel forensic agents. 250+ automated checks. One deterministic Forensic Confidence Score.**
 
+[![Demo Video](https://img.shields.io/badge/Demo%20Video-YouTube-red)](https://youtu.be/-JZ262m2yxw)
+[![Live Agent](https://img.shields.io/badge/Chain-Rule--Based%20Detection-green)](https://github.com/Gideon145/chainsight)
+[![Accuracy](https://img.shields.io/badge/Accuracy-12%2F12%20true%20positives-brightgreen)](https://github.com/Gideon145/chainsight/blob/master/ACCURACY_REPORT.md)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+
 Built for [SANS Find Evil! Hackathon](https://findevil.devpost.com/) — $22,000 prize pool. Deadline June 15, 2026.
 
 ---
@@ -88,7 +93,7 @@ ChainSight is not a running service. It is a set of Claude Code prompt extension
 | Dataset Documentation | [DATASET.md](DATASET.md) | SRL FOR508 Emotet scenario, fully reproducible |
 | Execution Logs | [EXECUTION_LOG.md](EXECUTION_LOG.md) | Full agent trace with tool calls, timestamps, token usage |
 | Try-It-Out Instructions | [TRY_IT_OUT.md](TRY_IT_OUT.md) | Step-by-step from SIFT VM to agent execution |
-| Demo Video | [YouTube](https://youtu.be/HAIuoL-LiIA) | 5-minute screencast with self-correction sequence |
+| Demo Video | [YouTube](https://youtu.be/-JZ262m2yxw) | 5-minute screencast with live terminal execution |
 
 ### Verification Commands
 
@@ -118,21 +123,6 @@ claude
 cd ~/chainsight/tests
 python -m pytest test_scoring.py -v
 ```
-
----
-
-## Submission Components Checklist
-
-All 8 components required by the hackathon:
-
-- [x] **1. Code Repository** — GitHub public, MIT license. 4 SKILL.md files, orchestrator CLAUDE.md, scoring engine, 14 pytest tests.
-- [x] **2. Demo Video** — 5-minute screencast showing live terminal execution against SRL FOR508 Emotet case data, including one self-correction sequence.
-- [x] **3. Architecture Diagram** — SVG with security boundaries annotated. Prompt-based vs architectural guardrails distinguished. 3-layer defense labeled.
-- [x] **4. Written Project Description** — [DEVPOST.md](DEVPOST.md). What it does, how we built it, challenges faced, lessons learned, next steps.
-- [x] **5. Dataset Documentation** — [DATASET.md](DATASET.md). SRL FOR508 Emotet scenario. Evidence file hashes, attack chain, expected output, reproducibility steps.
-- [x] **6. Accuracy Report** — [ACCURACY_REPORT.md](ACCURACY_REPORT.md). 12/12 true positives, 0 false positives, 0 hallucinations, 5/5 spoliation tests passed. Self-correction analysis documented. Limitations honestly stated.
-- [x] **7. Try-It-Out Instructions** — [TRY_IT_OUT.md](TRY_IT_OUT.md). Two paths: quick (SIFT VM + sample data) and custom (judge's own evidence). All prerequisites and expected output documented.
-- [x] **8. Agent Execution Logs** — [EXECUTION_LOG.md](EXECUTION_LOG.md). Full tool execution trace with timestamps, token usage per agent, self-correction sequence, inter-agent cross-references.
 
 ---
 
