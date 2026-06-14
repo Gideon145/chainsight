@@ -245,7 +245,7 @@ def run_threat_agent(mount: str) -> dict:
 
 CRITICAL findings:
 - Base64-encoded PowerShell commands (starts with "powershell.exe -enc") → CRITICAL, this is a malware download cradle
-- Registry persistence keys (HKLM\...\Run) pointing to DLLs in ProgramData → CRITICAL, malware persistence
+- Registry persistence keys (HKLM...Run) pointing to DLLs in ProgramData → CRITICAL, malware persistence
 - IP:port with "beacon" keyword → CRITICAL, C2 command and control
 
 Your job: read the actual file contents provided below. Identify the attack chain: phishing (invoice.js) → PowerShell download → persistence (reg key) → C2 beacon (config.bin).
@@ -315,6 +315,8 @@ def main():
     timeline_results = run_timeline_agent(args.mount)
     threat_results = run_threat_agent(args.mount)
 
+    has_mem = bool(memory_image and Path(memory_image).exists())
+
     # Cross-reference
     print("\n── Stage 2: Cross-Reference ──")
     agents = {
@@ -331,7 +333,6 @@ def main():
 
     # Compute Forensic Confidence Score
     print("\n── Stage 3: Forensic Confidence Score ──")
-    has_mem = bool(memory_image and Path(memory_image).exists())
     score = compute_forensic_score(
         memory_results.get("confidence", 0),
         disk_results.get("confidence", 0),
