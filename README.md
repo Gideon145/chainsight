@@ -1,107 +1,59 @@
-﻿# ChainSight — Autonomous Multi-Agent Forensic Analysis for Protocol SIFT
+﻿# ChainSight
 
-**4 parallel forensic agents. 250+ automated checks. One deterministic Forensic Confidence Score.**
+A deterministic forensic orchestrator that runs on the SIFT Workstation. Four agents analyze disk images against known attack patterns, cross-reference findings, and produce a verifiable confidence score. No API keys. No external dependencies. Python 3 and the tools already on SIFT.
 
-[![Demo Video](https://img.shields.io/badge/Demo%20Video-YouTube-red)](https://youtu.be/-JZ262m2yxw)
-[![Live Agent](https://img.shields.io/badge/Chain-Rule--Based%20Detection-green)](https://github.com/Gideon145/chainsight)
-[![Accuracy](https://img.shields.io/badge/Accuracy-12%2F12%20true%20positives-brightgreen)](https://github.com/Gideon145/chainsight/blob/master/ACCURACY_REPORT.md)
-[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
-
-Built for [SANS Find Evil! Hackathon](https://findevil.devpost.com/) — $22,000 prize pool. Deadline June 15, 2026.
+Built for the [SANS Find Evil! Hackathon](https://findevil.devpost.com/). All eight submission components included.
 
 ---
 
-## What Is ChainSight?
+## What ChainSight does
 
-ChainSight extends Protocol SIFT's Claude Code agent loop with four specialized forensic subagents that execute in parallel against disk images and memory captures. A memory agent (Volatility 3), disk agent (Sleuth Kit), timeline agent (Plaso), and threat hunting agent (YARA + Sigma) run simultaneously, cross-reference each other's findings, compute a unified Forensic Confidence Score (0-100), and produce a structured PDF report — all without human intervention.
+ChainSight accepts a mounted disk image and runs four detection stages against it:
 
-The system is built as a Python orchestrator using pure rule-based detection. No API keys. No Claude Code. No external services. All four subagents execute sequentially on the SIFT Workstation, with findings cross-referenced and scored deterministically. Same input always produces same output — verifiable by judges.
+1. **Collect** — `find` locates suspicious files (.js, .reg, .bin, .ps1, .dll). `cat` and `strings` read their contents.
+2. **Score** — Regex rules match contents against known attack patterns. Base64-encoded PowerShell in a Downloads folder is CRITICAL. A registry Run key in ProgramData is CRITICAL. An IP:port beacon configuration is HIGH.
+3. **Cross-reference** — Filesystem timestamps are compared. Files created within one second of each other indicate automated deployment.
+4. **Hunt** — Findings from the previous stages are correlated. Phishing payload plus persistence mechanism plus C2 beacon equals a confirmed Emotet-style kill chain.
 
----
+Each finding carries the exact tool output line that produced it. The confidence score is a weighted average of per-agent confidence and inter-agent correlation penalties, validated by fourteen deterministic tests.
 
-## The Problem ChainSight Solves
-
-AI-powered adversaries go from initial access to full domain control in under 8 minutes. CrowdStrike's fastest observed breakout time is 7 minutes. MIT's 2024 research shows AI-driven attack workflows running 47 times faster than human operators.
-
-Meanwhile, a human incident responder is still looking up command-line flags during an active incident. Manual DFIR cannot compete with autonomous agents executing thousands of requests.
-
-Protocol SIFT demonstrated that connecting AI agents to forensic tools through MCP is possible. It also hallucinates more than anyone would like — which is exactly why this hackathon exists. ChainSight tackles the gap: teach the agent to think like a senior analyst — how to sequence an investigation, recognize contradictions, and self-correct.
+The orchestrator runs in five seconds on a stock SIFT Workstation. Same evidence produces the same findings and the same score every time.
 
 ---
 
-## The Solution
+## Why this approach
 
-ChainSight layers onto Protocol SIFT's existing Claude Code agent with four extensions:
+The hackathon brief lists four architectural patterns. ChainSight is closest to Option 2 — a purpose-built server that exposes structured functions instead of generic shell commands. The orchestrator calls exact tool names (`find`, `cat`, `strings`) via `subprocess.run` in list form. No shell. No arbitrary commands. The agent physically cannot run `rm`, `dd`, `curl`, or any destructive tool because the orchestrator never invokes them.
 
-1. **Orchestrator system prompt** (CLAUDE.md) — defines agent sequencing, parallel dispatch, cross-reference rules, and the self-correction protocol
-2. **Four specialized forensic SKILL.md files** — each subagent has a dedicated skill that specifies its forensic domain, tool commands, anti-rationalization gates, and cross-reference expectations
-3. **Forensic Confidence Score engine** — deterministic weighted formula combining all four agent outputs with discrepancy and gap penalties
-4. **Self-correction protocol** — CLAIM → EXTRACT → DOUBT → RECONCILE → STOP loop that catches and corrects hallucinated or incomplete findings
+We started with Claude Code skills and Google Gemini. Claude required credits we did not have. Gemini's free tier allowed twenty requests per day. Each API failure forced removal of a dependency. The final version depends on nothing except Python 3 and the SIFT Workstation.
 
-The subagents:
-
-| Agent | Domain | Tools | Weight in Final Score |
-|-------|--------|-------|-----------------------|
-| memory-agent | Memory forensics | Volatility 3 (pslist, psscan, netscan, malfind, cmdline, dlllist, handles) | 25% |
-| disk-agent | Disk forensics | Sleuth Kit (fls, icat, mmls, fsstat), EZ Tools, hashdeep | 30% |
-| timeline-agent | Temporal correlation | Plaso (log2timeline, psort), mactime | 25% |
-| threat-agent | Threat hunting | YARA (rules + custom), Sigma rules, IOC matching | 20% |
-
-The Forensic Confidence Score:
-
-```
-Score = memory(25%) + disk(30%) + timeline(25%) + threat(20%)
-      - discrepancy_penalty(conflicts between agents)
-      - gap_penalty(missing coverage areas)
-```
-
-Grading thresholds: A (90-100), B (75-89), C (60-74), D (40-59), F (<40). Scoring is deterministic — verified by 14 pytest tests.
+This aligns with what the judging criteria prioritize: architectural enforcement over prompt-based guardrails. Evidence is mounted read-only at the OS level. The orchestrator cannot modify it. There is no prompt to ignore, no model to hallucinate, no API to rate-limit.
 
 ---
 
-## Architectural Approach
+## Judging criteria addressed
 
-**Direct Agent Extension (Claude Code + Protocol SIFT) — Option 1 in the hackathon brief.**
+The hackathon evaluates submissions on six criteria. Here is where ChainSight stands on each.
 
-ChainSight extends Protocol SIFT's existing Claude Code agent with additional SKILL.md files and an orchestrator prompt. All subagents run within a single Claude Code session. The architecture was chosen honestly with full documentation of tradeoffs:
+**Autonomous execution quality (tiebreaker).** The orchestrator runs without human intervention. It sequences its own approach: collect files, score contents, cross-reference timestamps, correlate into an attack chain. The pipeline is linear by design — each stage feeds the next. There is no agent loop that can spiral or stall.
 
-- **Why not Custom MCP Server (Option 2):** Wrapping 200+ SIFT tools as typed MCP functions is a 30-day project. With a 7-day build window, Option 1 is the fastest path to a working submission that demonstrates autonomous execution quality.
-- **Why not Multi-Agent Framework (Option 3):** AutoGen/CrewAI would require independent agent processes, inter-agent communication infrastructure, and termination condition tuning. Claude Code's single-session model provides tool-level parallelism without the orchestration overhead.
-- **Tradeoff:** Guardrails are prompt-based, not architectural. The model can theoretically ignore CLAUDE.md rules. ChainSight addresses this with a 3-layer defense and documented bypass testing — see [ARCHITECTURE.md](ARCHITECTURE.md).
+**IR accuracy.** Seven findings against planted Emotet artifacts. Three CRITICAL (encoded PowerShell, registry persistence, full attack chain). Three HIGH (C2 beacon, initial access, C2 confirmation). One MEDIUM (temporal clustering). Zero false positives. Zero hallucinated findings — impossible with deterministic regex rules. Full accuracy report in ACCURACY_REPORT.md.
 
-### Three-Layer Defense
+**Breadth and depth of analysis.** The current implementation handles disk images. Three artifact types are detected: phishing payloads, persistence mechanisms, and C2 configurations. The SKILL.md files define detection logic for memory forensics and threat hunting — those stages are designed but not wired in the current orchestrator. We prioritized depth on disk forensics over shallow coverage of all evidence types.
 
-| Layer | Type | Enforcement | Bypass Risk |
-|-------|------|-------------|-------------|
-| 1. CLAUDE.md rules | Prompt-based | Agent instructed to avoid writing to evidence directories | Medium — model can ignore |
-| 2. settings.json permissions | Permission-based | Claude Code blocks destructive commands (rm, dd, curl, ssh) | Low — enforced at tool-call level |
-| 3. Read-only filesystem mount | Architectural (OS) | `mount -o ro,noatime` — kernel rejects all write attempts | None — Linux VFS, not the agent |
+**Constraint implementation.** Guardrails are architectural, not prompt-based. Three layers: (1) Evidence mounted read-only (`mount -o ro,loop`) — kernel-enforced, zero bypass risk. (2) `subprocess.run` with list-form commands — no shell, no injection possible. (3) Exact tool names only — the orchestrator can call `find`, `cat`, and `strings`. It cannot call anything else. Documented with bypass analysis in ARCHITECTURE.md.
 
-Tested 5 spoliation scenarios: zero bypasses. Full analysis in [ARCHITECTURE.md](ARCHITECTURE.md).
+**Audit trail quality.** Every finding in the JSON report includes the source file path and the exact string that triggered the detection rule. Judges can trace `F-01: CRITICAL persistence.reg` back to the `cat` output that produced it. The scoring formula is deterministic and tested — run the pytest suite to verify.
+
+**Usability and documentation.** Three commands from clone to report. No accounts, no billing, no configuration. Every submission component is a markdown file in the repository. Step-by-step instructions in TRY_IT_OUT.md. Demo video shows the full five-minute run.
 
 ---
 
-## Live Testing (Verified)
-
-ChainSight is a Python orchestrator that runs directly on the SIFT Workstation. No API keys. No Claude Code. No external services. Judges run it locally against provided case data.
-
-| Artifact | Location | Status |
-|----------|----------|--------|
-| Code Repository | https://github.com/Gideon145/chainsight | Public, MIT license |
-| Architecture Diagram | [ARCHITECTURE.md](ARCHITECTURE.md) + [architecture.svg](architecture.svg) | 3-layer defense documented |
-| Accuracy Report | [ACCURACY_REPORT.md](ACCURACY_REPORT.md) | 12/12 true positives, 0 false positives, 0 hallucinations |
-| Dataset Documentation | [DATASET.md](DATASET.md) | SRL FOR508 Emotet scenario, suspect.E01 (8.2 GB) + memory.vmem (2.1 GB), fully reproducible |
-| Execution Logs | [EXECUTION_LOG.md](EXECUTION_LOG.md) | Full agent trace with tool calls, timestamps, findings |
-| Try-It-Out Instructions | [TRY_IT_OUT.md](TRY_IT_OUT.md) | Step-by-step from SIFT VM to agent execution, 3 commands |
-| Demo Video | [YouTube](https://youtu.be/-JZ262m2yxw) | 5-minute screencast with live terminal execution |
-
-### Verification Commands
+## How to run
 
 ```bash
-# Clone ChainSight
 git clone https://github.com/Gideon145/chainsight.git ~/chainsight
 
-# Create evidence (or use your own .E01/.dd)
 cd /cases/demo
 dd if=/dev/zero of=disk.dd bs=1M count=100
 sudo mkfs.ext4 disk.dd
@@ -112,101 +64,88 @@ echo "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate=C:\Progra
 echo "192.168.1.100:443 beacon interval=60 jitter=15" | sudo tee /mnt/rd01/ProgramData/config.bin > /dev/null
 sudo chmod -R a+r /mnt/rd01 && sudo umount /mnt/rd01 && sudo mount -o ro,loop disk.dd /mnt/rd01
 
-# Run the orchestrator
 python3 ~/chainsight/orchestrator.py --mount /mnt/rd01 --disk-image /cases/demo/disk.dd
-
-# View the report
 cat /cases/demo/reports/forensic_report.json
-
-# Run scoring tests
-cd ~/chainsight/tests
-python3 -m pytest test_scoring.py -v
 ```
+
+Expected output: seven findings (three CRITICAL), 85.5 Forensic Confidence Score (Grade B).
 
 ---
 
-## Accuracy Results
-
-Tested against SRL FOR508 Emotet scenario (phishing → PowerShell download → payload → C2 → persistence → lateral movement):
-
-| Metric | Result |
-|--------|--------|
-| True positives | 12/12 (100%) |
-| False positives | 0 |
-| Missed artifacts | 0 |
-| Hallucination rate | 0% (all findings have verifiable source citations) |
-| Self-corrections | 1 (powershell.exe anomaly score corrected from 15→75 after context review) |
-| Forensic Confidence Score | 95.6 (Grade A) |
-| Evidence spoliation tests | 5/5 passed, 0 bypasses |
-
-The agent correctly reconstructed the full Emotet kill chain. All 12 findings were verified against the SRL FOR508 lab answer key. Full details in [ACCURACY_REPORT.md](ACCURACY_REPORT.md).
-
----
-
-## Self-Correction Protocol
-
-```
-CLAIM → EXTRACT → DOUBT → RECONCILE → STOP
-│        │          │         │           │
-│        │          │         │           Max 3 iterations,
-│        │          │         │           then flag "unresolved"
-│        │          │         │
-│        │          │         Re-run analysis
-│        │          │         if doubt > 30%
-│        │          │
-│        │          "Could a legitimate user
-│        │          produce this artifact?"
-│        │
-│        Pull source line, tool output,
-│        and artifact offset
-│
-State every finding as a verifiable claim
-```
-
-Tuned parameters: doubt threshold 30%, max iterations 3. Validated against the powershell.exe false-negative scenario where initial scoring over-weighted the signed binary discount (-30). Context analysis (parent process, child process, user context) corrected the score from 15 to 75.
-
----
-
-## Structure
+## Repository structure
 
 ```
 chainsight/
-├── orchestrator.py                  # Python orchestrator — 4-agent dispatch, rule-based detection, scoring
-├── CLAUDE.md                        # Orchestrator system prompt (agent sequencing, parallel dispatch, self-correction)
-├── skills/
-│   ├── memory-forensics/SKILL.md    # Volatility 3 subagent (processes, network, code injection, handles)
-│   ├── disk-forensics/SKILL.md      # Sleuth Kit + EZ Tools subagent (filesystem, persistence, deleted files)
-│   ├── super-timeline/SKILL.md      # Plaso correlation subagent (temporal analysis, event chains)
-│   └── threat-hunting/SKILL.md      # YARA + Sigma subagent (IOC matching, behavioral detection)
+├── orchestrator.py              # Python orchestrator — 4-stage detection pipeline
+├── skills/                      # Agent definitions (disk, memory, timeline, threat)
+│   ├── disk-forensics/SKILL.md
+│   ├── memory-forensics/SKILL.md
+│   ├── super-timeline/SKILL.md
+│   └── threat-hunting/SKILL.md
 ├── tests/
-│   └── test_scoring.py              # 14 deterministic scoring tests (CI-ready, drift-proof)
-├── ARCHITECTURE.md                  # Security boundaries, guardrail analysis, bypass documentation
-├── ACCURACY_REPORT.md               # 12/12 true positives, 0 false positives, 0 hallucinations, 5/5 spoliation
-├── DATASET.md                       # SRL FOR508 Emotet: suspect.E01 (8.2 GB) + memory.vmem (2.1 GB)
-├── EXECUTION_LOG.md                 # Full agent trace with tool calls, timestamps, token usage
-├── TRY_IT_OUT.md                    # Step-by-step instructions for judges, 3 commands
-├── DEVPOST.md                       # Written project description (Devpost story format)
-├── setup.sh                         # One-command installer (SIFT VM → ready to run)
-└── README.md                        # This file
+│   └── test_scoring.py          # 14 deterministic scoring tests
+├── ARCHITECTURE.md              # Security boundaries and bypass analysis
+├── ACCURACY_REPORT.md           # 7 findings, 0 false positives, 0 hallucinations
+├── DATASET.md                   # Evidence specification and reproducibility
+├── EXECUTION_LOG.md             # Full tool execution trace
+├── TRY_IT_OUT.md                # Step-by-step judge instructions
+├── DEVPOST.md                   # Written project description
+├── architecture.svg             # Architecture diagram
+└── setup.sh                     # One-command SIFT VM installer
 ```
 
 ---
 
-## Honest Limitations
+## Submission artifacts
 
-1. **Single test scenario.** Accuracy assessed against one known case (Emotet). Performance against novel malware or APT-level adversaries is untested. No false positive stress test against clean systems.
+All eight components required by the hackathon:
 
-2. **No memory analysis in demo.** The current orchestrator demo uses disk-only evidence. Memory forensics requires Volatility 3 and a memory image (.mem/.vmem). The full architecture supports it — see SKILL.md files.
+- **Code repository** — [github.com/Gideon145/chainsight](https://github.com/Gideon145/chainsight), MIT license
+- **Demo video** — [5-minute screencast](https://youtu.be/-JZ262m2yxw) with live terminal execution
+- **Architecture diagram** — [architecture.svg](architecture.svg), security boundaries annotated
+- **Written description** — [DEVPOST.md](DEVPOST.md)
+- **Dataset documentation** — [DATASET.md](DATASET.md)
+- **Accuracy report** — [ACCURACY_REPORT.md](ACCURACY_REPORT.md)
+- **Try-it-out instructions** — [TRY_IT_OUT.md](TRY_IT_OUT.md)
+- **Execution logs** — [EXECUTION_LOG.md](EXECUTION_LOG.md)
 
-3. **Sequential execution.** Subagents run sequentially, not in true parallel. This keeps the orchestrator simple and dependency-free.
+---
 
-4. **No live endpoint triage.** ChainSight works with disk images and memory captures only. No SIEM integration, no remote endpoint connection, no real-time monitoring.
+## Detection rules
 
-3. **Single-session execution.** All subagents run within one Claude Code session. No persistent state across sessions. Each forensic audit is a fresh invocation.
+The orchestrator uses five regex-based detection rules. Each is documented with the pattern, severity, and the real-world attack it targets.
 
-4. **No live endpoint triage.** ChainSight works with disk images and memory captures only. No SIEM integration, no remote endpoint MCP connection, no real-time monitoring.
+| Rule | Pattern | Severity | Targets |
+|------|---------|----------|---------|
+| Encoded PowerShell in Downloads | `powershell.*-enc` in `.js` files under `Downloads` | CRITICAL | Emotet/IcedID initial access |
+| Registry persistence in ProgramData | `run` and `windows` in `.reg` files under `ProgramData` | CRITICAL | Emotet Run key persistence |
+| C2 beacon configuration | `\d+\.\d+\.\d+\.\d+:\d+` with `beacon` or `interval` in `.bin` files | HIGH | C2 setup pattern |
+| Temporal clustering | File timestamps within 1 second on same volume | MEDIUM | Automated malware deployment |
+| Cross-agent attack chain | Phishing + persistence + C2 all confirmed by separate agents | CRITICAL | Full Emotet kill chain |
 
-5. **Anthropic API dependency.** Requires an active Anthropic API key. SIFT Workstation is local; the AI reasoning is not.
+---
+
+## Forensic Confidence Score
+
+The score is a weighted average across agents, adjusted for inter-agent discrepancies and missing coverage areas.
+
+When a memory image is available: `disk(30%) + memory(25%) + timeline(25%) + threat(20%)`, minus discrepancy and gap penalties.
+
+When no memory image is provided: `disk(40%) + timeline(30%) + threat(30%)`, with gap penalties removed for the missing agent.
+
+Grading thresholds: A (90–100), B (75–89), C (60–74), D (40–59), F (below 40). The formula and weights are validated by fourteen pytest tests. Same evidence always produces the same score.
+
+---
+
+## Limitations
+
+The orchestrator detects known patterns against known malware families. It will not generalize to novel attacks. The rules are ten lines of Python each — they can be extended, but they will never reason about an unfamiliar artifact the way an analyst would.
+
+The current implementation handles disk images only. Memory forensics, live endpoint triage, and SIEM correlation are designed in the SKILL.md files but not wired into the orchestrator.
+
+Accuracy has been assessed against one scenario (Emotet). Performance against ransomware, APT-level adversaries, or clean systems is untested.
+
+No AI is used in detection. This eliminates hallucination risk and API dependency. It also means the orchestrator cannot perform semantic analysis of novel threat patterns. Adding a language model for zero-day detection, with the existing rule engine as a verification layer, is a planned extension.
 
 ---
 
