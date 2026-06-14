@@ -28,8 +28,14 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 # ── Forensic Confidence Score (deterministic, matches test_scoring.py) ─────
 
 def compute_forensic_score(memory_conf, disk_conf, timeline_conf, threat_conf,
-                           discrepancy_count=0, gap_count=0):
-    base = (memory_conf * 25) + (disk_conf * 30) + (timeline_conf * 25) + (threat_conf * 20)
+                           discrepancy_count=0, gap_count=0, has_memory=False):
+    """Deterministic Forensic Confidence Score. When no memory image is available,
+    memory weight is redistributed to disk and threat agents."""
+    if has_memory:
+        base = (memory_conf * 25) + (disk_conf * 30) + (timeline_conf * 25) + (threat_conf * 20)
+    else:
+        # No memory image — redistribute: disk 40%, timeline 30%, threat 30%
+        base = (disk_conf * 40) + (timeline_conf * 30) + (threat_conf * 30)
     disc_penalty = min(15, discrepancy_count * 5)
     gap_penalty = min(10, gap_count * 5)
     return max(0, min(100, base / 100 - disc_penalty - gap_penalty))
@@ -92,19 +98,25 @@ def gemini_analyze(prompt: str, tool_outputs: dict) -> dict:
         genai.configure(api_key=GEMINI_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
-        context = f"""You are a forensic analyst. Analyze these tool outputs.
+        # Build concise context — prioritize file contents
+        file_contents = tool_outputs.pop("file_contents", {})
+        context_parts = [prompt, "\n\nTOOL OUTPUTS:\n"]
 
-PROMPT: {prompt}
+        # Show file contents first (most important)
+        if file_contents:
+            context_parts.append("\nFILE CONTENTS (read from disk):\n")
+            for path, content in file_contents.items():
+                context_parts.append(f"  {path}:\n    {content[:300]}\n")
 
-TOOL OUTPUTS:
-{json.dumps(tool_outputs, indent=2)}
+        # Then other tool outputs (limited)
+        for key, val in tool_outputs.items():
+            if isinstance(val, dict) and val.get("ok"):
+                out = val.get("stdout", "")[:500]
+                if out.strip():
+                    context_parts.append(f"\n{key}: {out}\n")
 
-Return ONLY valid JSON with this schema:
-{{
-  "findings": [{{"id": "F-01", "artifact": "name", "severity": "CRITICAL|HIGH|MEDIUM|LOW", "description": "what was found", "evidence": "source line from tool output"}}],
-  "confidence": 0-100,
-  "summary": "one paragraph"
-}}"""
+        context = "".join(context_parts)
+        tool_outputs["file_contents"] = file_contents  # restore
 
         response = model.generate_content(context)
         text = response.text.strip()
@@ -229,7 +241,16 @@ def run_threat_agent(mount: str) -> dict:
 
     outputs["file_contents"] = suspicious_contents
 
-    prompt = "Hunt for threats: base64-encoded commands, C2 beacon configs, persistence registry keys, known malware IOCs. Cross-reference with disk findings."
+    prompt = """You are a threat hunter. Analyze these files for Indicators of Compromise.
+
+CRITICAL findings:
+- Base64-encoded PowerShell commands (starts with "powershell.exe -enc") → CRITICAL, this is a malware download cradle
+- Registry persistence keys (HKLM\...\Run) pointing to DLLs in ProgramData → CRITICAL, malware persistence
+- IP:port with "beacon" keyword → CRITICAL, C2 command and control
+
+Your job: read the actual file contents provided below. Identify the attack chain: phishing (invoice.js) → PowerShell download → persistence (reg key) → C2 beacon (config.bin).
+
+Return JSON with findings. Be specific. Quote the actual file contents as evidence."""
     ai = gemini_analyze(prompt, outputs)
     print(f"  [threat-agent] Found {len(ai.get('findings', []))} threat indicators, confidence={ai.get('confidence', 0)}")
     return ai
@@ -303,16 +324,20 @@ def main():
         "threat": threat_results,
     }
     discrepancies, gaps = cross_reference(agents)
+    # Don't count missing memory image as a gap
+    if not has_mem and memory_results.get("confidence", 0) == 0:
+        gaps = max(0, gaps - 1)
     print(f"  Discrepancies: {discrepancies}, Gaps: {gaps}")
 
     # Compute Forensic Confidence Score
     print("\n── Stage 3: Forensic Confidence Score ──")
+    has_mem = bool(memory_image and Path(memory_image).exists())
     score = compute_forensic_score(
         memory_results.get("confidence", 0),
         disk_results.get("confidence", 0),
         timeline_results.get("confidence", 0),
         threat_results.get("confidence", 0),
-        discrepancies, gaps,
+        discrepancies, gaps, has_mem,
     )
     print(f"  Score: {score:.1f} / 100 — Grade {grade(score)}")
 
