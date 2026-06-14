@@ -1,90 +1,113 @@
 ﻿# Try-It-Out Instructions — ChainSight
 
-Judges can run ChainSight against the provided sample case data or their
-own evidence files.
+Judges can run ChainSight against the provided sample case data or their own evidence files. No API keys required. No Claude Code. Pure Python + SIFT tools.
 
 ---
 
-## Option A: Quickest path (SIFT VM + Protocol SIFT + ChainSight)
+## Option A: Quickest path (SIFT VM + ChainSight)
 
 ### Prerequisites
 - SANS SIFT Workstation (download: sans.org/tools/sift-workstation)
-- Anthropic API key
-- 8 GB RAM minimum (16 GB recommended for memory analysis)
+- Python 3.12+ (pre-installed on SIFT)
+- No API keys, no external services, no credits needed
 
-### Step 1: Install Protocol SIFT
-```bash
-curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash
-```
-
-### Step 2: Install ChainSight
+### Step 1: Clone ChainSight
 ```bash
 git clone https://github.com/Gideon145/chainsight.git ~/chainsight
-cp ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.protocol-sift.bak
-cp ~/chainsight/CLAUDE.md ~/.claude/CLAUDE.md
-cp -r ~/chainsight/skills/* ~/.claude/skills/
 ```
 
-### Step 3: Prepare case directory
+### Step 2: Create evidence (or use your own)
 ```bash
-export CASE=chainsight-demo
-mkdir -p /cases/${CASE}/{analysis,exports,reports}
-cp ~/.claude/case-templates/CLAUDE.md /cases/${CASE}/CLAUDE.md
-cp ~/.claude/analysis-scripts/generate_pdf_report.py /cases/${CASE}/analysis/
+cd /cases/demo
+dd if=/dev/zero of=disk.dd bs=1M count=100
+sudo mkfs.ext4 disk.dd
+sudo mkdir -p /mnt/rd01
+sudo mount -o loop disk.dd /mnt/rd01
+
+# Plant test artifacts (simulated Emotet infection)
+sudo mkdir -p /mnt/rd01/Users/jsmith/Downloads /mnt/rd01/ProgramData
+echo "powershell.exe -enc JABwAGEAPQBOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAA7AA==" | sudo tee /mnt/rd01/Users/jsmith/Downloads/invoice.js > /dev/null
+echo "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\WindowsUpdate=C:\ProgramData\payload.dll" | sudo tee /mnt/rd01/ProgramData/persistence.reg > /dev/null
+echo "192.168.1.100:443 beacon interval=60 jitter=15" | sudo tee /mnt/rd01/ProgramData/config.bin > /dev/null
+
+# Lock evidence as read-only
+sudo chmod -R a+r /mnt/rd01
+sudo umount /mnt/rd01
+sudo mount -o ro,loop disk.dd /mnt/rd01
 ```
 
-### Step 4: Mount evidence (with provided sample or your own)
+### Step 3: Run the orchestrator
 ```bash
-sudo mkdir -p /mnt/ewf_rd01 /mnt/rd01
-sudo ewfmount /cases/${CASE}/suspect.E01 /mnt/ewf_rd01
-OFFSET=$(sudo mmls /mnt/ewf_rd01/ewf1 | awk '/NTFS/{print $3; exit}')
-sudo mount -o ro,loop,noatime,offset=$((OFFSET*512)) /mnt/ewf_rd01/ewf1 /mnt/rd01
-```
-
-### Step 5: Run the agent
-```bash
-cd /cases/${CASE}
-claude
-
-# Inside Claude Code:
-/forensic audit
+python3 ~/chainsight/orchestrator.py --mount /mnt/rd01 --disk-image /cases/demo/disk.dd
 ```
 
 ### Expected output
-- 4 agents execute in parallel (~90 seconds)
-- Structured JSON output from each agent
-- Forensic Confidence Score (0-100 with grade)
-- PDF report in `./reports/`
-- Session audit log in `./analysis/forensic_audit.log`
+- 4 agents execute sequentially (~5 seconds)
+- 3 CRITICAL findings: encoded PowerShell, registry persistence, full attack chain
+- 3 HIGH findings: C2 beacon config, phishing initial access, C2 confirmation
+- 1 MEDIUM finding: temporal clustering (automated deployment)
+- Forensic Confidence Score: 85.5 / 100 (Grade B)
+- JSON report saved to `/cases/demo/reports/forensic_report.json`
+
+### Step 4: View the report
+```bash
+cat /cases/demo/reports/forensic_report.json
+```
 
 ---
 
-## Option B: Read the execution log
+## Option B: Run against your own evidence
 
-If you cannot run the SIFT VM, the full execution log with all agent
-outputs, confidence score computation, and self-correction trace is at:
+```bash
+# Mount your own disk image
+sudo mkdir -p /mnt/rd01
+sudo mount -o ro,loop /path/to/your/disk.dd /mnt/rd01
+
+# Optionally provide a memory image
+python3 ~/chainsight/orchestrator.py \
+  --mount /mnt/rd01 \
+  --disk-image /path/to/your/disk.dd \
+  --memory /path/to/your/memory.mem
+```
+
+---
+
+## Option C: Read the execution log
+
+If you cannot run the SIFT VM, the full execution log with all agent outputs, cross-references, and score computation is at:
 
 **[EXECUTION_LOG.md](EXECUTION_LOG.md)**
 
-This log shows every tool invocation, every finding, and the complete
-attack chain reconstruction — exactly what a live run produces.
+---
+
+## What the orchestrator does
+
+The Python orchestrator (`orchestrator.py`) runs 4 detection stages:
+
+| Stage | Agent | Method | Output |
+|-------|-------|--------|--------|
+| 1. Collect | Disk | `find`, `cat`, `strings` — reads suspicious files | File contents |
+| 2. Score | Rule Engine | Regex-based pattern matching against file contents | 0-100 confidence per rule |
+| 3. Cross-Reference | Timeline | `find -printf` temporal analysis | Clustered creation times |
+| 4. Hunt | Threat | Cross-agent correlation for attack chain detection | IOC confirmation |
+
+**Key design decisions:**
+- Pure rule-based detection — no AI API, no rate limits, deterministic results
+- Same input = same output every time (verifiable by judges)
+- Zero external dependencies beyond Python stdlib + SIFT tools
+- All findings traceable to specific tool output lines
 
 ---
 
-## What to look for (self-correction sequence)
+## Detection rules tested
 
-The key moment to verify is the self-correction on the PowerShell finding:
-
-1. Agent flags `powershell.exe` as LOW confidence (anomaly score 15)
-   — Microsoft-signed binary, scoring formula discounts it
-2. Doubt-driven review triggers: checks parent process (cmd.exe from
-   explorer), child process (payload.exe, known IOC), user context
-   (jsmith, phishing victim)
-3. Anomaly score revised from 15 → 75 (LOW → HIGH confidence)
-4. This sequence is documented in EXECUTION_LOG.md at timestamp 14:04:05
-
-This demonstrates the agent recognizing its own mistake, cross-referencing
-context, and correcting — the core behavior the hackathon evaluates.
+| Rule | Pattern | Severity | Tested Against |
+|------|---------|----------|---------------|
+| Base64 PowerShell in Downloads `.js` | `powershell.*-enc` | CRITICAL | Emotet download cradle |
+| Registry Run key in ProgramData `.reg` | `run.*windows` | CRITICAL | Emotet persistence |
+| C2 beacon config `.bin` with IP:port | `\d+\.\d+\.\d+\.\d+:\d+` + `beacon` | HIGH | C2 setup pattern |
+| Temporal clustering < 1s | File timestamps within 1 second | MEDIUM | Automated deployment |
+| Cross-agent attack chain | Phishing + persistence + C2 confirmed | CRITICAL | Full kill chain |
 
 ---
 
@@ -92,8 +115,7 @@ context, and correcting — the core behavior the hackathon evaluates.
 
 | Problem | Solution |
 |---------|----------|
-| Claude Code not installed | `npm install -g @anthropic-ai/claude-code` |
-| WeasyPrint PDF fails | `pip3 install weasyprint` |
-| Evidence mount fails | Verify EWF image integrity: `ewfverify suspect.E01` |
-| Agent claims tools not found | Protocol SIFT installer adds tools to PATH; re-run `install.sh` |
-| skills not loading | Verify files in `~/.claude/skills/` with correct subdirectory names |
+| Python not found | `python3` is available on SIFT; use `python3 --version` to verify |
+| Permission denied reading files | Ensure `sudo chmod -R a+r /mnt/rd01` before remounting read-only |
+| Mount point busy | `sudo umount /mnt/rd01` before remounting |
+| No findings | Verify files were planted correctly: `find /mnt/rd01 -type f` |
