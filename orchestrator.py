@@ -23,7 +23,6 @@ from pathlib import Path
 
 CASE_DIR = Path(os.environ.get("CASE_DIR", "/cases/demo"))
 MOUNT_POINT = Path(os.environ.get("MOUNT_POINT", "/mnt/rd01"))
-MEMORY_IMAGE = os.environ.get("MEMORY_IMAGE", "")  # optional
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 # ── Forensic Confidence Score (deterministic, matches test_scoring.py) ─────
@@ -168,17 +167,17 @@ def run_disk_agent(mount: str, image: str = "") -> dict:
     print(f"  [disk-agent] Found {len(ai.get('findings', []))} artifacts, confidence={ai.get('confidence', 0)}")
     return ai
 
-def run_memory_agent() -> dict:
+def run_memory_agent(memory_image: str = "") -> dict:
     print("  [memory-agent] Checking for memory image...")
-    if not MEMORY_IMAGE or not Path(MEMORY_IMAGE).exists():
+    if not memory_image or not Path(memory_image).exists():
         print("  [memory-agent] No memory image available — skipping")
         return {"findings": [], "confidence": 0, "summary": "No memory image provided"}
 
     outputs = {}
-    outputs["info"] = run_tool(["vol", "-f", MEMORY_IMAGE, "windows.info"])
-    outputs["pslist"] = run_tool(["vol", "-f", MEMORY_IMAGE, "windows.pslist"])
-    outputs["netscan"] = run_tool(["vol", "-f", MEMORY_IMAGE, "windows.netscan"])
-    outputs["cmdline"] = run_tool(["vol", "-f", MEMORY_IMAGE, "windows.cmdline"])
+    outputs["info"] = run_tool(["vol", "-f", memory_image, "windows.info"])
+    outputs["pslist"] = run_tool(["vol", "-f", memory_image, "windows.pslist"])
+    outputs["netscan"] = run_tool(["vol", "-f", memory_image, "windows.netscan"])
+    outputs["cmdline"] = run_tool(["vol", "-f", memory_image, "windows.cmdline"])
 
     prompt = "Analyze memory for: hidden processes, injected code, C2 network connections, encoded PowerShell commands."
     ai = gemini_analyze(prompt, outputs)
@@ -250,8 +249,7 @@ def main():
     parser.add_argument("--disk-image", default="", help="Raw disk image path (for mmls)")
     args = parser.parse_args()
 
-    global MEMORY_IMAGE
-    MEMORY_IMAGE = args.memory
+    memory_image = args.memory
 
     print("=" * 60)
     print(f"  ChainSight Autonomous Forensic Orchestrator")
@@ -270,7 +268,7 @@ def main():
     # Dispatch all 4 agents in parallel (sequentially for reliability)
     print("\n── Stage 1: Dispatch ──")
     disk_results = run_disk_agent(args.mount, args.disk_image)
-    memory_results = run_memory_agent()
+    memory_results = run_memory_agent(memory_image)
     timeline_results = run_timeline_agent(args.mount)
     threat_results = run_threat_agent(args.mount)
 
