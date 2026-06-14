@@ -245,7 +245,7 @@ def main():
     parser = argparse.ArgumentParser(description="ChainSight Autonomous Forensic Orchestrator")
     parser.add_argument("--case", default=str(CASE_DIR), help="Case directory")
     parser.add_argument("--mount", default=str(MOUNT_POINT), help="Mount point for disk evidence")
-    parser.add_argument("--memory", default=MEMORY_IMAGE, help="Memory image path")
+    parser.add_argument("--memory", default="", help="Memory image path")
     parser.add_argument("--disk-image", default="", help="Raw disk image path (for mmls)")
     args = parser.parse_args()
 
