@@ -1,97 +1,89 @@
 ﻿# ChainSight — Devpost Project Description
 
+## Inspiration
+
+I audit smart contracts for a living. Last month I found a Medium-severity bug in a DeFi protocol on Sherlock — it took me hours of manual analysis on a 900-line contract. After submitting, one thought stuck: attackers don't wait hours anymore.
+
+Anthropic's report on GTG-1002 confirmed it — state-sponsored operators using AI agents at request rates "physically impossible" for humans. CrowdStrike clocked breakout time at 7 minutes. MIT found AI attack workflows running 47x faster than human operators.
+
+The offensive side is automated. The defensive side is still typing command-line flags during an active incident. ChainSight is my attempt to apply adversarial thinking — the same mindset I use to find bugs in code — to the problem of finding attackers in evidence.
+
+---
+
 ## What it does
 
-ChainSight extends Protocol SIFT with 4 specialized forensic subagents that
-run in parallel against disk images and memory captures. Memory, disk,
-timeline, and threat hunting agents cross-reference each other's findings,
-compute a unified Forensic Confidence Score (0-100), and generate a PDF
-report — all without human intervention.
+ChainSight is a Python orchestrator that dispatches 4 forensic agents against disk images and memory captures. Each agent specializes in one evidence type, produces structured JSON output with confidence scores, and cross-references findings against the other three agents.
 
-The agent sequences its approach like a senior analyst: baseline →
-deep dive → cross-reference → self-correct → report. When findings
-contradict each other, the agent re-runs analysis with adjusted parameters.
+If the timeline agent detects files created within milliseconds of each other and the disk agent finds an encoded PowerShell command and a registry Run key, the threat hunting agent correlates them into a complete Emotet kill chain. Every finding is traceable to the exact tool command that produced it.
 
-In testing against the SRL FOR508 Emotet scenario, ChainSight identified
-all 12 attack artifacts (9 CRITICAL, 2 HIGH, 1 MEDIUM) with a 95.6
-Confidence Score and zero false positives. The agent self-corrected one
-finding — an encoded PowerShell command initially scored too low due to
-Microsoft signature bias, corrected after context analysis.
+The result is a single **Forensic Confidence Score (0-100)** — graded A through F — with a deterministic formula validated by 14 pytest tests. Same evidence, same score, every time.
+
+In live testing against planted Emotet artifacts: 7 findings (3 CRITICAL, 3 HIGH, 1 MEDIUM), 85.5 Forensic Confidence Score (Grade B), full attack chain reconstructed. The demo video shows the entire 5-minute run: evidence creation → 4-agent dispatch → cross-reference → scoring → report.
+
+---
 
 ## How we built it
 
-**Architecture: Direct Agent Extension (Option 1).** We extended Protocol
-SIFT's Claude Code agent with 4 new SKILL.md files, an orchestrator system
-prompt (CLAUDE.md), a confidence scoring engine, and a self-correction
-protocol. No separate MCP server. All agents run within a single Claude
-Code session.
+**Architecture: Pure Python orchestrator with rule-based detection.** Zero API keys. Zero external services. Zero Claude Code dependency.
 
-**Patterns adapted from production Claude Code skills:**
-- Parallel subagent dispatch pattern from claude-ads (250+ audit checks)
-- SKILL.md anatomy from Addy Osmani's agent-skills (process-not-prose,
-  anti-rationalization tables, verification gates)
-- Doubt-driven review from agent-skills (CLAIM→EXTRACT→DOUBT→RECONCILE→STOP)
-- Deterministic eval harness pattern from claude-ads (pytest CI suite)
+The orchestrator (`orchestrator.py`) runs 4 detection stages:
 
-**Security: 3-layer defense.** OS-level read-only mounts (strongest),
-Protocol SIFT's settings.json deny list (permission-based), and CLAUDE.md
-behavioral rules (prompt-based). All documented with bypass analysis in
-ARCHITECTURE.md. Tested 5 spoliation scenarios — zero bypasses.
+| Stage | Agent | Method |
+|-------|-------|--------|
+| 1. Collect | Disk | `find`, `cat`, `strings` — reads suspicious files from mounted evidence |
+| 2. Score | Rule Engine | Regex pattern matching: base64 PowerShell → CRITICAL, Run key persistence → CRITICAL, IP:port beacon → HIGH |
+| 3. Cross-Reference | Timeline | `find -printf` temporal analysis: files created within 1 second → automated deployment |
+| 4. Hunt | Threat | Cross-agent correlation: phishing + persistence + C2 confirmed → full kill chain |
 
-## Challenges
+**Why rule-based, not AI.** We started with Google Gemini for semantic analysis. Hit rate limits on the free tier. Switched to Claude Code — hit credit limits. Realized the planted artifacts (encoded PowerShell, reg key, C2 config) don't need AI to detect. Regex is faster, deterministic, and costs nothing. The hackathon judges explicitly asked for architectures where "the agent physically cannot run destructive commands" — our orchestrator only runs `find`, `cat`, and `strings`. It cannot modify evidence.
 
-**1. Choosing the right architecture with 7 days.** We initially wanted
-to build a Custom MCP Server (Option 2) — the most sound architecture per
-the hackathon brief. But wrapping 200+ SIFT tools as typed MCP functions
-is a 30-day project. We chose Direct Agent Extension honestly and documented
-every tradeoff and guardrail limitation.
+**Security: architectural enforcement.** Evidence is mounted read-only (`mount -o ro,loop`). The orchestrator uses Python's `subprocess.run` with list-form commands — no shell, no injection possible. Tools are called by exact name (`find`, `cat`, `strings`) — no arbitrary command execution. Documented in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**2. Making scoring deterministic.** The Forensic Confidence Score formula
-needed to produce identical results for identical evidence. We built a
-14-test pytest harness that validates scoring math, grade boundaries, and
-severity weights. CI-ready and drift-proof.
+---
 
-**3. Self-correction that actually works.** The doubt-driven review protocol
-required tuning the doubt threshold (30% confidence) and iteration cap (3
-max). Too low and the agent spirals. Too high and it never self-corrects.
-We settled on 30% with a hard STOP after 3 iterations — validated against
-the powershell.exe false-negative scenario.
+## Challenges we ran into
 
-**4. Honest security documentation.** The hackathon explicitly asks what
-happens when the model ignores read-only rules. We documented 5 spoliation
-scenarios with actual outcomes (OS blocks writes, permissions block commands,
-verification gates catch fabrications). No sugarcoating.
+**API rate limits killed two approaches.** Gemini 2.5 Flash Lite free tier: 20 requests/day. Gemini 2.0 Flash: 0 requests/day (quota exhausted). Claude Code: credit balance too low. Each failure forced us toward a better architecture. The final version needs no API at all — pure Python on the SIFT Workstation.
+
+**Permission hell on read-only mounts.** Evidence files created as root, filesystem remounted read-only, then the orchestrator (running as `sansforensics`) couldn't read them. Fixed by adding `sudo chmod -R a+r` before the final `mount -o ro`. Took 6 deployment attempts to get right.
+
+**Making scoring deterministic under missing data.** Without a memory image, 25% of the score weight was lost. The original formula would always produce F-grade results on disk-only cases. Redistributed weights (disk 40%, timeline 30%, threat 30%) when memory is absent, with gap penalties removed. Same formula handles both cases transparently.
+
+**Domain gap.** I don't know Windows forensics. Every detection rule was built by reading SIFT tool documentation, studying the FOR508 scenario, and pattern-matching from audit workflows I already understand. The rules caught all planted artifacts on the first successful run.
+
+---
+
+## Accomplishments that we're proud of
+
+**Zero-cost, zero-dependency architecture.** No API keys. No credits. No external services. The entire system runs on a stock SIFT Workstation with Python 3. Judges can clone the repo and run it in 3 commands. No account setup, no billing, no rate limits.
+
+**Deterministic, verifiable results.** Same evidence → same findings → same score. Every time. Validated by 14 pytest tests. Judges can reproduce any run and get identical output. No AI hallucination possible because there's no AI — just regex rules with clearly documented detection logic.
+
+**Full attack chain reconstruction.** The threat agent doesn't just list findings — it correlates across agents. Phishing (invoice.js) + persistence (Run key) + C2 (beacon config) = confirmed Emotet kill chain. This is what a senior analyst does manually. The orchestrator does it in 5 seconds.
+
+**Honest limitations.** We document exactly what happens when the model isn't there to help — the rule engine catches known patterns but won't generalize to novel attacks. That's the tradeoff. For known malware families, it's faster and more reliable than an LLM. For zero-days, you still need a human.
+
+---
 
 ## What we learned
 
-1. **Prompt-based guardrails are weaker than architectural ones — but the OS
-   is the ultimate guard.** Read-only mounts are enforced by the Linux VFS,
-   not by Claude Code. That's the layer that actually protects evidence.
+1. **The simplest architecture wins under time pressure.** Started with Claude Code skills. Pivoted to Gemini API. Ended with pure Python. Each pivot removed a dependency. The final version has none.
 
-2. **Parallel agents find more than sequential ones.** The timeline agent
-   caught the persistence-then-logon correlation that neither memory nor
-   disk agent caught independently. Cross-referencing is force multiplication.
+2. **Regex beats AI for known patterns.** An encoded PowerShell command is an encoded PowerShell command. You don't need a language model to find `powershell.*-enc`. The rules are 10 lines of Python each. They run instantly. They never hallucinate.
 
-3. **Anti-rationalization tables work.** The agent tried to skip psscan
-   ("pslist looked clean") and the anti-rationalization table blocked it.
-   psscan found 2 hidden processes that pslist missed.
+3. **Cross-referencing is force multiplication.** Individual agents find individual artifacts. The threat agent connects them into an attack chain. That's the value — not any single detection rule, but the correlation between them.
 
-4. **Scoring needs context, not just formulas.** The signed binary discount
-   (-30) was too aggressive for PowerShell — a Microsoft-signed binary used
-   maliciously. Context (process lineage, user behavior) corrected this.
+4. **You can build in a domain you don't know.** My background is DeFi, not DFIR. But the pattern is the same: identify what attackers leave behind, build structured checks for each artifact, cross-reference to catch contradictions. The domain changes. The methodology doesn't.
 
-## What's next
+5. **Read-only mounts are the real security.** Not prompt engineering. Not API keys. The Linux kernel rejecting write attempts to a read-only filesystem — that's what actually protects evidence.
 
-- Run against additional case types (ransomware, APT, insider threat)
-- Add false positive stress testing against clean systems
-- Build the Custom MCP Server (Option 2) with the full 30-day timeline
-- Add live endpoint triage via MCP-connected SIEM
-- Open-source the eval harness for community accuracy benchmarking
+---
 
-## Built with
+## What's next for ChainSight
 
-- SANS SIFT Workstation (200+ forensic tools)
-- Protocol SIFT (Claude Code DFIR configuration)
-- Claude Code (Anthropic)
-- Python 3 + WeasyPrint (PDF reports)
-- pytest (eval harness)
+- **Add more detection rules** — ransomware (Ryuk/Conti), APT (APT29), insider threat patterns
+- **False positive stress test** against clean disk images to measure baseline noise
+- **Memory forensics integration** — wire Volatility 3 into the orchestrator for full disk+memory analysis
+- **Build the typed MCP server** — wrap SIFT tools as structured functions so the agent physically cannot run destructive commands (the architecture judges explicitly preferred)
+- **Add live endpoint triage** via MCP-connected SIEM for real-time incident response
+- **Open-source the eval harness** so the community can benchmark forensic agent accuracy
