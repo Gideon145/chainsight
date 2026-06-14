@@ -381,7 +381,11 @@ Tested five spoliation scenarios: write attempt to evidence mount, destructive c
 
 ### Build Timeline
 
-ChainSight was built over a 48-hour sprint for the SANS Find Evil! Hackathon. The architecture pivoted twice — from Claude Code skills (credit limit) to Google Gemini (rate limit) to pure Python (zero dependencies) — with each constraint producing a better design. The final orchestrator was written, tested, and deployed in a single session. The demo video, accuracy report, and all submission artifacts were completed within the build window.
+ChainSight was built for the SANS Find Evil! Hackathon (April 15 – June 15, 2026). Development began June 9 with the initial architecture — four SKILL.md files extending Protocol SIFT's Claude Code agent with a deterministic scoring engine. That version was fully documented with accuracy reports, execution logs, and a three-layer defense analysis.
+
+On June 12, the architecture was rewritten as a pure Python orchestrator after Claude Code credit limits and Gemini rate limits made the original approach unsustainable. The Python orchestrator was written, tested against planted Emotet artifacts, and deployed on the SIFT Workstation in a single session. The demo video, final accuracy report, architecture diagram, and this README were completed June 14.
+
+The git history reflects the full arc: 20+ commits from June 9 to June 14, covering initial scaffold → Claude Code skills → Python orchestrator rewrite → all eight submission components.
 
 ---
 
